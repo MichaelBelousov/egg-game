@@ -22,7 +22,7 @@ func _ready() -> void:
 	for i in range(EGG_QUEUE_SIZE):
 		advance_egg_queue()
 
-	set_wolf_pos(WolfPos.Left)
+	wolf_pos = WolfPos.Left
 
 	$NextEggTimer.connect(
 		"timeout",
@@ -53,18 +53,16 @@ var score: int = 0:
 
 enum WolfPos { Left, Right }
 
-var wolf_pos = WolfPos.Left
-
-# FIXME: make setter
-func set_wolf_pos(pos: WolfPos) -> void:
-	wolf_pos = pos
-	if pos == WolfPos.Left:
-		$Wolf.set_global_position($Floor/Left.global_position)
-	elif pos == WolfPos.Right:
-		$Wolf.set_global_position($Floor/Right.global_position)
+var wolf_pos = WolfPos.Left:
+	set(pos):
+		wolf_pos = pos
+		if pos == WolfPos.Left:
+			$Wolf.set_global_position($Floor/Left.global_position)
+		elif pos == WolfPos.Right:
+			$Wolf.set_global_position($Floor/Right.global_position)
 
 func _input(event):
 	if event.is_action_pressed("go_left"):
-		set_wolf_pos(WolfPos.Left)
+		wolf_pos = WolfPos.Left
 	elif event.is_action_pressed("go_right"):
-		set_wolf_pos(WolfPos.Right)
+		wolf_pos = WolfPos.Right
