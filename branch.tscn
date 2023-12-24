@@ -1,0 +1,22 @@
+[gd_scene load_steps=3 format=3 uid="uid://i86omxfr06go"]
+
+[ext_resource type="Script" path="res://branch.gd" id="1_l51qk"]
+
+[sub_resource type="PhysicsMaterial" id="PhysicsMaterial_onwix"]
+rough = true
+
+[node name="Branch" type="Line2D"]
+points = PackedVector2Array(4, 1, 194, 81)
+default_color = Color(0.341176, 0.211765, 0.0313726, 1)
+script = ExtResource("1_l51qk")
+
+[node name="Spawn" type="Node2D" parent="."]
+position = Vector2(37, -34)
+
+[node name="StaticBody2D" type="StaticBody2D" parent="."]
+position = Vector2(37, -34)
+physics_material_override = SubResource("PhysicsMaterial_onwix")
+
+[node name="CollisionPolygon2D" type="CollisionPolygon2D" parent="StaticBody2D"]
+position = Vector2(1, -3)
+polygon = PackedVector2Array(-37, 32, 157, 115, 155, 122, -37, 41)
