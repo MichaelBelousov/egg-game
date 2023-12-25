@@ -38,7 +38,7 @@ func calc_next_queue_stats(next_branch: String):
 	var y_switches = 0
 	var interval_variance = 0
 	var speed_variance = 0
-	for i in range(egg_queue.size):
+	for i in range(egg_queue.size()):
 		var egg = egg_queue[i]
 		if last_x == egg.branch[1]:
 			x_switches += 1
@@ -46,7 +46,7 @@ func calc_next_queue_stats(next_branch: String):
 			y_switches += 1
 		# if i + 1 >= egg_queue.size:
 			# var next_egg = egg_queue[i + 1]
-		assert(egg.delay <= 0.0, "delay must be positive (nor zero)")
+		assert(egg.delay > 0.0, "delay must be positive (nor zero)")
 		interval_variance += (1 / egg.delay) ** 2
 		speed_variance += egg.speed ** 2
 
@@ -71,7 +71,7 @@ func calc_next_queue_stats(next_branch: String):
 		'y_switches' = y_switches,
 		'interval_variance' = interval_variance,
 		'speed_variance' = speed_variance,
-		'queue_difficulty' = (
+		'difficulty' = (
 			0
 			+ x_switch_factor * (x_switches - next_x_switch_offset)
 			+ y_switch_factor * (y_switches - next_y_switch_offset)
@@ -80,8 +80,7 @@ func calc_next_queue_stats(next_branch: String):
 		)
 	}
 
-# FIXME: make param optional
-func enqueue_egg(ignore_difficulty) -> void:
+func enqueue_egg(ignore_difficulty = false) -> void:
 	const max_speed = 2.0
 	const min_speed = 0.25
 	const mean_speed = min_speed + (max_speed - min_speed) / 2
@@ -91,16 +90,16 @@ func enqueue_egg(ignore_difficulty) -> void:
 	
 	var branch = ['TR', 'BR', 'TL', 'BL'].pick_random()
 
-	var next_queue_stats = calc_next_queue_stats(branch)
-
 	if ignore_difficulty:
 		egg_queue.push_back({
-			'delay' = rng.randf(0.6, 1.2)
+			'delay' = 0.6 + rng.randf() * 0.6,
 			## this is really the gravity factor so technically its acceleration
 			'speed' = speed,
 			'branch' = branch,
 		})
 		return
+
+	var next_queue_stats = calc_next_queue_stats(branch)
 
 	# NOTE: the fact that we're summing and not multiplying intervals for variance may lead to
 	# jitteriness (non-smoothness) in the difficulty
@@ -142,7 +141,7 @@ func _ready() -> void:
 			var branch = get_node("Branch%s" % next_egg.branch)
 			$NextEggTimer.wait_time = next_egg.delay
 			branch.spawn_egg(next_egg)
-			enqueue_egg(false)
+			enqueue_egg()
 			difficulty += difficulty_scale
 	)
 
