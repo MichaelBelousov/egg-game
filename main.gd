@@ -6,32 +6,144 @@ var difficulty: float = 1.0
 @onready var bottom_branches = [$BranchBL, $BranchBR]
 @onready var branch_groups = [top_branches, bottom_branches]
 
-const EGG_QUEUE_SIZE = 6
+# FIXME: must be calculated based on speed...
+const egg_top_fall_time = 4.0666
+const egg_bot_fall_time = 3.4666
+
+var rng = RandomNumberGenerator.new()
+
+const egg_queue_size = 6
 var egg_queue = []
 
-func advance_egg_queue() -> void:
+# The difficulty curve is based on the idea that difficulty of the sized "egg queue" is a (polynomial?) function with parameters:
+# - sum intervals between egg landings
+# - speed of each egg in the queue
+# - spawn location variance (how often it switches between left and right, top and bottom eggs)
+# being a (polynomial?) simple function, we can choose guassian distributed random values for all but one parameter, set a
+# target output difficulty that gets more difficult with each spawned egg, and solve the resulting equation for the one unknown parameter.
+# NOTE: this function is no longer accurate once the average spawn frequency (or proportional difficulty thereof) is so high that the queue throughput is higher than the average egg lifetime
+
+const x_switch_factor = 0.5
+const y_switch_factor = 0.25
+const interval_variance_factor = 1.5
+const speed_variance_factor = 0.5
+
+## amount by which difficulty increases with every egg
+const difficulty_scale = 0.1
+
+func calc_next_queue_stats(next_branch: String):
+	var last_x = egg_queue[0].branch[1]
+	var last_y = egg_queue[0].branch[0]
+	var x_switches = 0
+	var y_switches = 0
+	var interval_variance = 0
+	var speed_variance = 0
+	for i in range(egg_queue.size):
+		var egg = egg_queue[i]
+		if last_x == egg.branch[1]:
+			x_switches += 1
+		if last_y == egg.branch[0]:
+			y_switches += 1
+		# if i + 1 >= egg_queue.size:
+			# var next_egg = egg_queue[i + 1]
+		assert(egg.delay <= 0.0, "delay must be positive (nor zero)")
+		interval_variance += (1 / egg.delay) ** 2
+		speed_variance += egg.speed ** 2
+
+		last_x = egg_queue[0].branch[1]
+		last_y = egg_queue[0].branch[0]
+
+	var next_x_switch_offset = 0
+	var next_y_switch_offset = 0
+
+	if next_branch != null:
+		if last_x == next_branch[1]:
+			x_switches += 1
+			next_x_switch_offset += 1
+		if last_y == next_branch[0]:
+			y_switches += 1
+			next_y_switch_offset += 1
+	
+	return {
+		'x_switches' = x_switches,
+		'next_x_switch_offset' = next_x_switch_offset,
+		'next_y_switch_offset' = next_y_switch_offset,
+		'y_switches' = y_switches,
+		'interval_variance' = interval_variance,
+		'speed_variance' = speed_variance,
+		'queue_difficulty' = (
+			0
+			+ x_switch_factor * (x_switches - next_x_switch_offset)
+			+ y_switch_factor * (y_switches - next_y_switch_offset)
+			+ speed_variance_factor * speed_variance
+			+ interval_variance_factor * interval_variance
+		)
+	}
+
+# FIXME: make param optional
+func enqueue_egg(ignore_difficulty) -> void:
+	const max_speed = 2.0
+	const min_speed = 0.25
+	const mean_speed = min_speed + (max_speed - min_speed) / 2
+	# recall that ~60% of the curve falls within 1 standard deviation
+	const speed_variance = (max_speed - min_speed) / 4
+	var speed = clamp(rng.randfn(mean_speed, speed_variance), min_speed, max_speed)
+	
+	var branch = ['TR', 'BR', 'TL', 'BL'].pick_random()
+
+	var next_queue_stats = calc_next_queue_stats(branch)
+
+	if ignore_difficulty:
+		egg_queue.push_back({
+			'delay' = rng.randf(0.6, 1.2)
+			## this is really the gravity factor so technically its acceleration
+			'speed' = speed,
+			'branch' = branch,
+		})
+		return
+
+	# NOTE: the fact that we're summing and not multiplying intervals for variance may lead to
+	# jitteriness (non-smoothness) in the difficulty
+	var target_interval_variance = difficulty
+	var needed_variance = target_interval_variance - next_queue_stats.interval_variance
+	var needed_difficulty = difficulty - next_queue_stats.difficulty
+	var next_egg_non_interval_difficulty = (
+		0
+		+ x_switch_factor * (next_queue_stats.next_x_switch_offset / next_queue_stats.x_switches)
+		+ y_switch_factor * (next_queue_stats.next_y_switch_offset / next_queue_stats.y_switches)
+		+ speed_variance_factor * (speed ** 2 / next_queue_stats.speed_variance)
+	)
+	var needed_interval_difficulty = needed_difficulty - next_egg_non_interval_difficulty
+	var needed_interval_variance = needed_interval_difficulty / interval_variance_factor
+	# inverse of interval variance in function above
+	var needed_delay = 1 / sqrt(needed_interval_variance)
+
+	next_queue_stats.delay = needed_delay
+	print(next_queue_stats)
+
 	egg_queue.push_back({
-		'delay' = 1.0 / difficulty,
-		'branch' = ['TR', 'BR', 'TL', 'BL'].pick_random(),
+		'delay' = needed_delay,
+		## this is really the gravity factor so technically its acceleration
+		'speed' = speed,
+		'branch' = branch,
 	})
-	difficulty += 0.1
 
 func _ready() -> void:
 	self.score = 0
 
-	for i in range(EGG_QUEUE_SIZE):
-		advance_egg_queue()
+	for i in range(egg_queue_size):
+		enqueue_egg(true)
 
 	wolf_pos = WolfPos.Left
-
 	$NextEggTimer.connect(
 		"timeout",
 		func():
 			var next_egg = egg_queue.pop_front()
 			var branch = get_node("Branch%s" % next_egg.branch)
 			$NextEggTimer.wait_time = next_egg.delay
-			branch.spawn_egg()
-			advance_egg_queue()
+			branch.spawn_egg(next_egg)
+			enqueue_egg(false)
+			difficulty += difficulty_scale
 	)
 
 	$Floor.connect(
@@ -40,6 +152,7 @@ func _ready() -> void:
 			# FIXME: check if egg?
 			var egg = body
 			var name = String(egg.get_parent().name)
+			# name is like "BranchTL" or "BranchBR" for top-left/bottom-right
 			if ((name[7] == 'L' and wolf_pos == WolfPos.Left)
 			 or (name[7] == 'R' and wolf_pos == WolfPos.Right)):
 				score += 1
@@ -53,7 +166,7 @@ var score: int = 0:
 
 enum WolfPos { Left, Right }
 
-var wolf_pos = WolfPos.Left:
+var wolf_pos: WolfPos = WolfPos.Left:
 	set(pos):
 		wolf_pos = pos
 		if pos == WolfPos.Left:

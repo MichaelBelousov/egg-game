@@ -1,9 +1,12 @@
-[gd_scene load_steps=2 format=3 uid="uid://cnjvcvhojd43m"]
+[gd_scene load_steps=3 format=3 uid="uid://cnjvcvhojd43m"]
+
+[ext_resource type="Script" path="res://egg.gd" id="1_8qcs4"]
 
 [sub_resource type="CircleShape2D" id="CircleShape2D_5qjgq"]
 
 [node name="Egg" type="RigidBody2D"]
 gravity_scale = 0.3
+script = ExtResource("1_8qcs4")
 
 [node name="CollisionShape2D" type="CollisionShape2D" parent="."]
 shape = SubResource("CircleShape2D_5qjgq")

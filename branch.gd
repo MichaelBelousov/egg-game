@@ -6,7 +6,8 @@ var egg_scene = preload("res://egg.tscn")
 
 var egg = null
 
-func spawn_egg():
+func spawn_egg(egg_data):
 	self.egg = egg_scene.instantiate()
+	egg.init(egg_data)
 	self.egg.position = $Spawn.position
 	self.add_child(self.egg);
