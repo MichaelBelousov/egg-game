@@ -1,7 +1,6 @@
 extends Node2D
 
 
-var difficulty: float = 1.0
 @onready var top_branches = [$BranchTL, $BranchTR]
 @onready var bottom_branches = [$BranchBL, $BranchBR]
 @onready var branch_groups = [top_branches, bottom_branches]
@@ -28,8 +27,9 @@ const y_switch_factor = 0.25
 const interval_variance_factor = 1.5
 const speed_variance_factor = 0.5
 
+var difficulty: float = 0.8
 ## amount by which difficulty increases with every egg
-const difficulty_scale = 0.1
+const difficulty_scale = 0.05
 
 func calc_next_queue_stats(next_branch: String):
 	var last_x = egg_queue[0].branch[1]
@@ -80,25 +80,14 @@ func calc_next_queue_stats(next_branch: String):
 		)
 	}
 
-func enqueue_egg(ignore_difficulty = false) -> void:
+func enqueue_egg() -> void:
 	const max_speed = 2.0
 	const min_speed = 0.25
 	const mean_speed = min_speed + (max_speed - min_speed) / 2
 	# recall that ~60% of the curve falls within 1 standard deviation
 	const speed_variance = (max_speed - min_speed) / 4
 	var speed = clamp(rng.randfn(mean_speed, speed_variance), min_speed, max_speed)
-	
 	var branch = ['TR', 'BR', 'TL', 'BL'].pick_random()
-
-	if ignore_difficulty:
-		egg_queue.push_back({
-			'delay' = 0.6 + rng.randf() * 0.6,
-			## this is really the gravity factor so technically its acceleration
-			'speed' = speed,
-			'branch' = branch,
-		})
-		return
-
 	var next_queue_stats = calc_next_queue_stats(branch)
 
 	# NOTE: the fact that we're summing and not multiplying intervals for variance may lead to
@@ -126,12 +115,43 @@ func enqueue_egg(ignore_difficulty = false) -> void:
 		'speed' = speed,
 		'branch' = branch,
 	})
+	
+func simple_enqueue_egg() -> void:
+	var branch = ['TR', 'BR', 'TL', 'BL'].pick_random()
+
+	const min_speed = 0.3
+	var max_speed = min_speed + self.difficulty * 0.5
+	var mean_speed = min_speed + (max_speed - min_speed) / 2
+	var speed_variance = ((max_speed - min_speed) * clamp(self.difficulty, 0, 4)) / 8
+
+	const abs_max_delay = 3.2
+	const abs_min_delay = 0.01
+	var abs_mean_delay = abs_min_delay + (abs_max_delay - abs_min_delay) / 2
+	var min_delay = abs_mean_delay - self.difficulty * 0.5
+	var max_delay = abs_max_delay / (2 ** self.difficulty) # exponential decay
+	var delay_variance = ((max_delay - min_delay) * clamp(self.difficulty, 0, 4)) / 8
+	var mean_delay = min_delay + (max_delay - min_delay) / 2
+
+	var speed = clamp(rng.randfn(mean_speed, speed_variance), min_speed, max_speed)
+	var delay = clamp(rng.randfn(mean_delay, delay_variance), min_delay, max_delay)
+
+	var new_egg = {
+		## this is really the gravity factor so technically its acceleration
+		'speed' = speed,
+		'delay' = delay,
+		'branch' = branch,
+	}
+
+
+	egg_queue.push_back(new_egg)
+
+	print("queueing egg with speed={speed}, delay={delay}, branch={branch} at difficulty %s".format(new_egg) % self.difficulty)
 
 func _ready() -> void:
 	self.score = 0
 
 	for i in range(egg_queue_size):
-		enqueue_egg(true)
+		simple_enqueue_egg()
 
 	wolf_pos = WolfPos.Left
 	$NextEggTimer.connect(
@@ -141,7 +161,7 @@ func _ready() -> void:
 			var branch = get_node("Branch%s" % next_egg.branch)
 			$NextEggTimer.wait_time = next_egg.delay
 			branch.spawn_egg(next_egg)
-			enqueue_egg()
+			simple_enqueue_egg()
 			difficulty += difficulty_scale
 	)
 
