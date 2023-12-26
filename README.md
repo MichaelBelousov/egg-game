@@ -9,4 +9,10 @@ with a smooth difficulty curve. But this first iteration is just a simple increm
 implementation.
 
 Potential future iterations may explain how to create a perfect difficulty curve, and
-implement it
+implement it.
+
+## Using godot
+
+Forgive me father for I have sinned.
+I absolutely have sinned here by making such a simple game for the web in godot. It would be a much much smaller
+bundle using just about any HTML5 game engine or even better the HTML5 canvas API. I will do that eventually.
